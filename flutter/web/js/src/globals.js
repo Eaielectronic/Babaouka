@@ -3,6 +3,7 @@ import PORT from "./connection";
 import _sodium from "libsodium-wrappers";
 import { CursorData } from "./message";
 import { loadVp9 } from "./codec";
+import { detectHwCodecs, hwCodecs } from "./hwdecoder";
 import { checkIfRetry, version } from "./gen_js_from_hbb";
 import { initZstd, translate } from "./common";
 import PCMPlayer from "pcm-player";
@@ -343,6 +344,13 @@ window.setByName = (name, value) => {
       break;
     case 'change_prefer_codec':
       curConn.changePreferCodec(value);
+      break;
+    case 'custom-fps':
+      curConn.setCustomFps(parseInt(value));
+      break;
+    case 'custom_image_quality':
+      curConn.setCustomImageQuality(parseInt(value));
+      break;
     case 'cursor':
       setCustomCursor(value);
       break;
@@ -491,6 +499,7 @@ window.init = async () => {
     pcmPlayer.feed(e.data);
   }
   loadVp9(() => { });
+  await detectHwCodecs();
   await initZstd();
   console.log('init done');
   if (window.onInitFinished) {
@@ -626,7 +635,7 @@ export function getUserDefaultOption(value) {
     'image_quality': 'balanced',
     'codec-preference': 'auto',
     'custom_image_quality': '50',
-    'custom-fps': '30',
+    'custom-fps': '60',
   };
   try {
     const userDefaultOptions = JSON.parse(localStorage.getItem('user-default-options')) || {};
@@ -786,9 +795,9 @@ function increasePort(host, offset) {
 
 function getAlternativeCodecs() {
   return JSON.stringify({
-    vp8: true,
+    vp8: false,
     av1: false,
-    h264: false,
+    h264: hwCodecs.h264,
     h265: false,
   });
 }

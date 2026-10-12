@@ -92,7 +92,18 @@
 <body>
   <div id="cover">
     <div id="cv-app"></div>
-    <div id="cover-foot"><a id="cover-start" href="#">starter</a></div>
+    <footer id="cover-foot">
+      <nav>
+        <a href="#" data-doc="about">À propos</a>
+        <a href="#" data-doc="legal">Mentions légales</a>
+        <a href="#" data-doc="privacy">Confidentialité</a>
+        <a href="#" data-doc="terms">Conditions d'utilisation</a>
+        <a href="#" data-doc="sitemap">Plan du site</a>
+        <a href="#" data-doc="contact">Contact</a>
+        <a href="#" id="cover-start">starter</a>
+      </nav>
+      <p>&copy; 2026 Draw and Paint</p>
+    </footer>
   </div>
   <script>
     (function () {
@@ -100,10 +111,15 @@
       try {
         if (sessionStorage.getItem('dp-started') === '1') { cover.remove(); return; }
       } catch (e) {}
+      var last = 0;
       document.getElementById('cover-start').addEventListener('click', function (e) {
         e.preventDefault();
-        try { sessionStorage.setItem('dp-started', '1'); } catch (err) {}
-        cover.remove();
+        var now = Date.now();
+        if (now - last < 800) {
+          try { sessionStorage.setItem('dp-started', '1'); } catch (err) {}
+          cover.remove();
+        }
+        last = now;
       });
     })();
   </script>

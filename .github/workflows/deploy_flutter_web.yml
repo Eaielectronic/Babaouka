@@ -59,7 +59,7 @@ jobs:
 
       - name: Compilation de Flutter Web
         working-directory: ./flutter
-        run: flutter build web --release --base-href "/rustdesk/"
+        run: flutter build web --release --base-href "/Babaouka/"
 
       - name: Vérifier le résultat du build
         run: |

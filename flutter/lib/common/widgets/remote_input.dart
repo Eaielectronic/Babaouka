@@ -77,14 +77,13 @@ class RawTouchGestureDetectorRegion extends StatefulWidget {
 }
 
 /// touchMode only:
-///   OneFingerPan -> start/end -> right down start/end
+///   LongPress -> right click
+///   OneFingerPan -> start/end -> left down start/end
 ///   onDoubleTapDown -> move to
 ///   onLongPressDown => move to
 ///
-/// all modes (one finger taps are the right button, two fingers the left one):
-///   Tap / LongPress -> right click
-///   DoubleFiner tap -> left click
-///   (a one finger drag holds the right button while moving)
+/// all modes:
+///   DoubleFiner tap -> right click
 ///
 /// mouseMode only:
 ///   HoldDrag -> left drag
@@ -169,11 +168,11 @@ class _RawTouchGestureDetectorRegionState
       final isMoved =
           await ffi.cursorModel.move(d.localPosition.dx, d.localPosition.dy);
       if (isMoved) {
+        // If pan already handled 'down', don't send it again.
         if (lastTapDownDetails != null && !_touchModePanStarted) {
-          await inputModel.tap(MouseButtons.right);
-        } else {
-          await inputModel.tapUp(MouseButtons.right);
+          await inputModel.tapDown(MouseButtons.left);
         }
+        await inputModel.tapUp(MouseButtons.left);
       }
     }
   }
@@ -194,7 +193,7 @@ class _RawTouchGestureDetectorRegionState
         return;
       }
       // Mobile, "Mouse mode"
-      await inputModel.tap(MouseButtons.right);
+      await inputModel.tap(MouseButtons.left);
     }
   }
 
@@ -315,13 +314,14 @@ class _RawTouchGestureDetectorRegionState
       return;
     }
 
+    // mobile touch mode: right click where the fingers touched
     if (isMobile && ffiModel.touchMode) {
       final pos = _doubleFinerTapPosition;
       if (!ffi.cursorModel.isInRemoteRect(pos)) {
         return;
       }
       if (await ffi.cursorModel.move(pos.dx, pos.dy)) {
-        await inputModel.tap(MouseButtons.left);
+        await inputModel.tap(MouseButtons.right);
       }
       return;
     }
@@ -332,7 +332,7 @@ class _RawTouchGestureDetectorRegionState
     final isDesktopInRemoteRect = (isDesktop || isWebDesktop) &&
         ffi.cursorModel.isInRemoteRect(_doubleFinerTapPosition);
     if (isMobileMouseMode || isDesktopInRemoteRect) {
-      await inputModel.tap(MouseButtons.left);
+      await inputModel.tap(MouseButtons.right);
     }
   }
 
@@ -343,7 +343,7 @@ class _RawTouchGestureDetectorRegionState
     }
     if (!handleTouch) {
       if (isSpecialHoldDragActive) return;
-      await inputModel.sendMouse('down', MouseButtons.right);
+      await inputModel.sendMouse('down', MouseButtons.left);
     }
   }
 
@@ -362,7 +362,7 @@ class _RawTouchGestureDetectorRegionState
       return;
     }
     if (!handleTouch) {
-      await inputModel.sendMouse('up', MouseButtons.right);
+      await inputModel.sendMouse('up', MouseButtons.left);
     }
   }
 
@@ -402,7 +402,7 @@ class _RawTouchGestureDetectorRegionState
       }
       // In relative mouse mode, skip mouse down - only send movement via sendMobileRelativeMouseMove
       if (!inputModel.relativeMouseMode.value) {
-        await inputModel.sendMouse('down', MouseButtons.right);
+        await inputModel.sendMouse('down', MouseButtons.left);
       }
       await ffi.cursorModel.move(d.localPosition.dx, d.localPosition.dy);
     } else {
@@ -447,7 +447,7 @@ class _RawTouchGestureDetectorRegionState
     if (handleTouch) {
       // In relative mouse mode, skip mouse up - matches the skipped mouse down in onOneFingerPanStart
       if (!inputModel.relativeMouseMode.value) {
-        await inputModel.sendMouse('up', MouseButtons.right);
+        await inputModel.sendMouse('up', MouseButtons.left);
       }
     }
   }

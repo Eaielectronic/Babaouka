@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Remote Desktop.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Simple Drawer">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+
+  <title>Simple Drawer</title>
+  <link rel="manifest" href="manifest.json">
+  <script src="ogvjs-1.8.6/ogv.js"></script>
+  <script type="module" crossorigin src="js/dist/index.js"></script>
+  <link rel="modulepreload" href="js/dist/vendor.js">
+  <script src="yuv-canvas-1.2.6.js"></script>
+  <style>
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 0;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      -ms-transform: translate(-50%, -50%);
+      transform: translate(-50%, -50%);
+    }
+
+    .loader {
+      border: 16px solid #f3f3f3;
+      border-radius: 50%;
+      border: 15px solid;
+      border-top: 16px solid #024eff;
+      border-right: 16px solid white;
+      border-bottom: 16px solid #024eff;
+      border-left: 16px solid white;
+      width: 120px;
+      height: 120px;
+      -webkit-animation: spin 2s linear infinite;
+      animation: spin 2s linear infinite;
+    }
+
+    @-webkit-keyframes spin {
+      0% {
+        -webkit-transform: rotate(0deg);
+      }
+
+      100% {
+        -webkit-transform: rotate(360deg);
+      }
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+
+</head>
+
+<body>
+  <div class="loading">
+    <div class="loader"></div>
+  </div>
+  <!-- This script installs service_worker.js to provide PWA functionality to
+       application. For more information, see:
+       https://developers.google.com/web/fundamentals/primers/service-workers -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (registrations) {
+        for (var registration of registrations) {
+          registration.unregister();
+        }
+      });
+    }
+    if (window.caches) {
+      caches.keys().then(function (names) {
+        for (var name of names) caches.delete(name);
+      });
+    }
+    var bootStartAt = Date.now();
+    var bootLogs = [];
+    function bootLog(step, detail) {
+      var elapsed = Date.now() - bootStartAt;
+      var line = '[Simple Drawer web boot +' + elapsed + 'ms] ' + step;
+      if (detail !== undefined) {
+        try {
+          line += ' ' + (typeof detail === 'string' ? detail : JSON.stringify(detail));
+        } catch (_) { }
+      }
+      bootLogs.push(line);
+      if (bootLogs.length > 200) {
+        bootLogs.shift();
+      }
+      console.log(line);
+    }
+    bootLog('bootstrap script loaded');
+    var scriptLoaded = false;
+    var bootErrorShown = false;
+    function showBootError(message) {
+      if (bootErrorShown) {
+        bootLog('boot error ignored because one is already shown', message);
+        return;
+      }
+      bootErrorShown = true;
+      bootLog('showing boot error', message);
+      var loader = document.querySelector('.loading');
+      if (loader) {
+        loader.remove();
+      }
+      var error = document.createElement('div');
+      error.style.position = 'absolute';
+      error.style.top = '50%';
+      error.style.left = '50%';
+      error.style.transform = 'translate(-50%, -50%)';
+      error.style.color = '#d93025';
+      error.style.maxWidth = '80vw';
+      error.style.fontFamily = 'sans-serif';
+      error.style.textAlign = 'center';
+      error.style.background = 'white';
+      error.style.padding = '12px';
+      error.style.border = '1px solid #f3c5c5';
+      error.style.borderRadius = '6px';
+      var title = document.createElement('div');
+      title.style.marginBottom = '8px';
+      title.textContent = message;
+      error.append(title);
+      var details = document.createElement('details');
+      details.open = true;
+      var summary = document.createElement('summary');
+      summary.textContent = 'Startup diagnostics';
+      summary.style.cursor = 'pointer';
+      details.append(summary);
+      var logs = document.createElement('pre');
+      logs.style.whiteSpace = 'pre-wrap';
+      logs.style.textAlign = 'left';
+      logs.style.marginTop = '8px';
+      logs.style.maxHeight = '40vh';
+      logs.style.overflow = 'auto';
+      logs.textContent = bootLogs.length > 0 ? bootLogs.join('\n') : 'No diagnostics captured.';
+      details.append(logs);
+      error.append(details);
+      document.body.append(error);
+    }
+    function loadMainDartJs() {
+      if (scriptLoaded) {
+        bootLog('main.dart.js load skipped (already requested)');
+        return;
+      }
+      scriptLoaded = true;
+      var scriptTag = document.createElement('script');
+      scriptTag.src = 'main.dart.js?v=' + Date.now();
+      scriptTag.type = 'application/javascript';
+      scriptTag.onload = function () {
+        bootLog('main.dart.js loaded');
+      };
+      scriptTag.onerror = function () {
+        bootLog('main.dart.js load failed', scriptTag.src);
+        showBootError('Failed to load main.dart.js. Build the Flutter web app first and serve it over HTTP.');
+      };
+      bootLog('requesting main.dart.js', scriptTag.src);
+      document.body.append(scriptTag);
+    }
+    window.addEventListener('load', loadMainDartJs);
+    window.addEventListener('error', function (event) {
+      var t = event.target;
+      var src = (t && (t.src || t.href)) || '';
+      bootLog('window error', (event.message || event.type) + ' ' + src + ' ' + (event.filename || '') + ':' + (event.lineno || ''));
+    }, true);
+    window.addEventListener('unhandledrejection', function (event) {
+      bootLog('unhandled rejection', event.reason || 'unknown reason');
+    });
+    setTimeout(loadMainDartJs, 1500);
+    setTimeout(function () {
+      if (!window._flutter && document.querySelector('.loading')) {
+        bootLog('startup timeout', {
+          hasFlutterObject: !!window._flutter,
+          hasInitFunction: !!window.init
+        });
+        var message = window.init
+          ? 'Web app startup timed out. Check browser console logs for startup errors.'
+          : 'Web core assets are missing. Run the web JS build before opening this page.';
+        showBootError(message);
+      } else {
+        bootLog('startup watchdog passed');
+      }
+    }, 15000);
+  </script>
+  <script src="libs/firebase-app.js?8.10.1"></script>
+  <script src="libs/firebase-analytics.js?8.10.1"></script>
+
+  <script>
+    // Your web app's Firebase configuration
+    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+    const firebaseConfig = {
+      apiKey: "AIzaSyCgehIZk1aFP0E7wZtYRRqrfvNiNAF39-A",
+      authDomain: "rustdesk.firebaseapp.com",
+      databaseURL: "https://rustdesk.firebaseio.com",
+      projectId: "rustdesk",
+      storageBucket: "rustdesk.appspot.com",
+      messagingSenderId: "768133699366",
+      appId: "1:768133699366:web:d50faf0792cb208d7993e7",
+      measurementId: "G-9PEH85N6ZQ"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    firebase.analytics();
+  </script>
+</body>
+
+</html>

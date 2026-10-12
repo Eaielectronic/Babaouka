@@ -77,7 +77,7 @@ class RawTouchGestureDetectorRegion extends StatefulWidget {
 }
 
 /// touchMode only:
-///   LongPress -> right click
+///   LongPress -> left down, move to drag, left up on release
 ///   OneFingerPan -> start/end -> left down start/end
 ///   onDoubleTapDown -> move to
 ///   onLongPressDown => move to
@@ -90,6 +90,9 @@ class RawTouchGestureDetectorRegion extends StatefulWidget {
 class _RawTouchGestureDetectorRegionState
     extends State<RawTouchGestureDetectorRegion> {
   Offset _cacheLongPressPosition = Offset(0, 0);
+  // Touch mode: a press that is held turns into a left button press, so the
+  // finger can keep moving to drag a window or select text.
+  bool _longPressLeftDown = false;
   // Timestamp of the last long press event.
   int _cacheLongPressPositionTs = 0;
   double _mouseScrollIntegral = 0; // mouse scroll speed controller
@@ -258,6 +261,7 @@ class _RawTouchGestureDetectorRegionState
       return;
     }
     if (handleTouch) {
+      _longPressLeftDown = false;
       await inputModel.tapUp(MouseButtons.left);
     }
   }
@@ -274,6 +278,9 @@ class _RawTouchGestureDetectorRegionState
         if (!isMoved) {
           return;
         }
+        _longPressLeftDown = true;
+        await inputModel.tapDown(MouseButtons.left);
+        return;
       } else {
         if (shouldBlockMouseModeEvent()) {
           return;
@@ -288,7 +295,8 @@ class _RawTouchGestureDetectorRegionState
   }
 
   onLongPressMoveUpdate(LongPressMoveUpdateDetails d) async {
-    if (!ffiModel.isPeerMobile || isNotTouchBasedDevice()) {
+    if ((!ffiModel.isPeerMobile && !_longPressLeftDown) ||
+        isNotTouchBasedDevice()) {
       return;
     }
     if (handleTouch) {

@@ -274,7 +274,12 @@ export default class Connection {
         const c = await decompress(cd.colors);
         if (!c) continue;
         cd.colors = c;
-        globals.pushEvent("cursor_data", cd);
+        const onCursorData = (window as any).onCursorData;
+        if (typeof onCursorData === "function") {
+          onCursorData(String(cd.id), cd.hotx, cd.hoty, cd.width, cd.height, cd.colors);
+        } else {
+          globals.pushEvent("cursor_data", cd);
+        }
         /*
         let ctx = cursorCanvas.getContext("2d");
         cursorCanvas.width = cd.width;

@@ -1,0 +1,77 @@
+name: Deploy Flutter Web to GitHub Pages
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'flutter/**'
+      - '.github/workflows/deploy_flutter_web.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout du dépôt
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configuration de Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.44.x'
+          cache: true
+
+      - name: Téléchargement des dépendances
+        working-directory: ./flutter
+        run: flutter pub get
+
+      - name: Patch qr_code_scanner pour le web (Flutter 3.44)
+        run: |
+          QR_WEB="${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev/qr_code_scanner-1.0.1/lib/src/web/flutter_qr_web.dart"
+          if ! grep -qF "dart:ui_web" "$QR_WEB"; then
+            sed -i "s|import 'dart:ui' as ui;|import 'dart:ui' as ui; import 'dart:ui_web' as ui_web;|" "$QR_WEB"
+          fi
+          sed -i "s|ui\.platformViewRegistry|ui_web.platformViewRegistry|g" "$QR_WEB"
+          grep -qF "ui_web.platformViewRegistry" "$QR_WEB"
+
+      - name: Install protobuf-compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Build Web JS bundle
+        working-directory: ./flutter/web/js
+        run: |
+          set -euxo pipefail
+          yarn install --frozen-lockfile --non-interactive
+          yarn build
+
+      - name: Vérifier que le bundle JS existe
+        run: |
+          test -s flutter/web/js/dist/index.js
+          test -s flutter/web/js/dist/vendor.js
+          rm -rf flutter/web/js/node_modules
+
+      - name: Compilation de Flutter Web
+        working-directory: ./flutter
+        run: flutter build web --release --base-href "/rustdesk/"
+
+      - name: Vérifier le résultat du build
+        run: |
+          test -s flutter/build/web/main.dart.js
+          test -s flutter/build/web/js/dist/index.js
+          test -s flutter/build/web/js/dist/vendor.js
+          find flutter/build/web -name .gitignore -delete
+          find flutter/build/web -name .gitattributes -delete
+          touch flutter/build/web/.nojekyll
+      - name: Déploiement sur GitHub Pages (branche gh-pages)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./flutter/build/web
+          publish_branch: gh-pages

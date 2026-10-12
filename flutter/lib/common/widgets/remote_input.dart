@@ -77,14 +77,14 @@ class RawTouchGestureDetectorRegion extends StatefulWidget {
 }
 
 /// touchMode only:
-///   OneFingerPan -> start/end -> left down start/end
+///   OneFingerPan -> start/end -> right down start/end
 ///   onDoubleTapDown -> move to
 ///   onLongPressDown => move to
 ///
 /// all modes (one finger taps are the right button, two fingers the left one):
 ///   Tap / LongPress -> right click
 ///   DoubleFiner tap -> left click
-///   (a one finger drag still holds the left button, so windows can be moved)
+///   (a one finger drag holds the right button while moving)
 ///
 /// mouseMode only:
 ///   HoldDrag -> left drag
@@ -172,7 +172,7 @@ class _RawTouchGestureDetectorRegionState
         if (lastTapDownDetails != null && !_touchModePanStarted) {
           await inputModel.tap(MouseButtons.right);
         } else {
-          await inputModel.tapUp(MouseButtons.left);
+          await inputModel.tapUp(MouseButtons.right);
         }
       }
     }
@@ -343,7 +343,7 @@ class _RawTouchGestureDetectorRegionState
     }
     if (!handleTouch) {
       if (isSpecialHoldDragActive) return;
-      await inputModel.sendMouse('down', MouseButtons.left);
+      await inputModel.sendMouse('down', MouseButtons.right);
     }
   }
 
@@ -362,7 +362,7 @@ class _RawTouchGestureDetectorRegionState
       return;
     }
     if (!handleTouch) {
-      await inputModel.sendMouse('up', MouseButtons.left);
+      await inputModel.sendMouse('up', MouseButtons.right);
     }
   }
 
@@ -402,7 +402,7 @@ class _RawTouchGestureDetectorRegionState
       }
       // In relative mouse mode, skip mouse down - only send movement via sendMobileRelativeMouseMove
       if (!inputModel.relativeMouseMode.value) {
-        await inputModel.sendMouse('down', MouseButtons.left);
+        await inputModel.sendMouse('down', MouseButtons.right);
       }
       await ffi.cursorModel.move(d.localPosition.dx, d.localPosition.dy);
     } else {
@@ -447,7 +447,7 @@ class _RawTouchGestureDetectorRegionState
     if (handleTouch) {
       // In relative mouse mode, skip mouse up - matches the skipped mouse down in onOneFingerPanStart
       if (!inputModel.relativeMouseMode.value) {
-        await inputModel.sendMouse('up', MouseButtons.left);
+        await inputModel.sendMouse('up', MouseButtons.right);
       }
     }
   }

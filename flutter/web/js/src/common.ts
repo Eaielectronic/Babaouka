@@ -35,13 +35,18 @@ export async function decompress(compressedArray: Uint8Array) {
 const LANG = getLang();
 
 export function translate(locale: string, text: string): string {
+  // Same placeholder rule as the Rust side: write {value} in the UI and {} in the translation.
+  const holder = text.match(/\{(.*?)\}/);
+  const name = holder ? text.replace(/\{(.*?)\}/, "{}") : text;
   const lang = LANG || locale.substring(locale.length - 2).toLowerCase();
   let en = LANGS.en as any;
   let dict = (LANGS as any)[lang];
   if (!dict) dict = en;
-  let res = dict[text];
-  if (!res && lang != "en") res = en[text];
-  return (res || text).replace(/RustDesk/g, "Draw and Paint");
+  let res = dict[name];
+  if (!res && lang != "en") res = en[name];
+  res = res || name;
+  if (holder) res = res.replace("{}", holder[1]);
+  return res.replace(/\\n/g, "\n").replace(/RustDesk/g, "Draw and Paint");
 }
 
 const zCode = "z".charCodeAt(0);

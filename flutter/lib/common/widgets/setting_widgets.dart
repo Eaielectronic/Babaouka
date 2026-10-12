@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
+import 'package:flutter_hbb/utils/text_file_io.dart';
 import 'package:get/get.dart';
 
 customImageQualityWidget(
@@ -200,7 +201,39 @@ List<Widget> ServerConfigImportExportWidgets(
     showToast(translate('Export server configuration successfully'));
   }
 
+  importFile() async {
+    final text = await pickTextFile();
+    if (text == null || text.trim().isEmpty) return;
+    importConfig(controllers, errMsgs, text.trim());
+  }
+
+  exportFile() async {
+    final text = ServerConfig(
+            idServer: controllers[0].text.trim(),
+            relayServer: controllers[1].text.trim(),
+            apiServer: controllers[2].text.trim(),
+            key: controllers[3].text.trim())
+        .encode();
+    if (await saveTextFile('server-config.txt', text)) {
+      showToast(translate('Export server configuration successfully'));
+    }
+  }
+
   return [
+    if (isWeb) ...[
+      Tooltip(
+        message: translate('Import from file'),
+        child: IconButton(
+            icon: Icon(Icons.file_upload_outlined, color: Colors.grey),
+            onPressed: importFile),
+      ),
+      Tooltip(
+        message: translate('Export to file'),
+        child: IconButton(
+            icon: Icon(Icons.file_download_outlined, color: Colors.grey),
+            onPressed: exportFile),
+      ),
+    ],
     Tooltip(
       message: translate('Import server config'),
       child: IconButton(

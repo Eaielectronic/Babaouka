@@ -77,13 +77,15 @@ class RawTouchGestureDetectorRegion extends StatefulWidget {
 }
 
 /// touchMode only:
-///   LongPress -> right click
 ///   OneFingerPan -> start/end -> left down start/end
 ///   onDoubleTapDown -> move to
 ///   onLongPressDown => move to
 ///
+/// all modes (one finger is always the left button, two fingers the right one):
+///   Tap / LongPress -> left click
+///   DoubleFiner tap -> right click
+///
 /// mouseMode only:
-///   DoubleFiner -> right click
 ///   HoldDrag -> left drag
 class _RawTouchGestureDetectorRegionState
     extends State<RawTouchGestureDetectorRegion> {
@@ -277,7 +279,7 @@ class _RawTouchGestureDetectorRegionState
           return;
         }
       }
-      await inputModel.tap(MouseButtons.right);
+      await inputModel.tap(MouseButtons.left);
     } else {
       // It's better to send a message to tell the controlled device that the long press event is triggered.
       // We're now using a `TimerTask` in `InputService.kt` to decide whether to trigger the long press event.
@@ -309,6 +311,17 @@ class _RawTouchGestureDetectorRegionState
   onDoubleFinerTap(TapDownDetails d) async {
     lastDeviceKind = d.kind;
     if (isNotTouchBasedDevice()) {
+      return;
+    }
+
+    if (isMobile && ffiModel.touchMode) {
+      final pos = _doubleFinerTapPosition;
+      if (!ffi.cursorModel.isInRemoteRect(pos)) {
+        return;
+      }
+      if (await ffi.cursorModel.move(pos.dx, pos.dy)) {
+        await inputModel.tap(MouseButtons.right);
+      }
       return;
     }
 

@@ -2,6 +2,7 @@ import Websock from "./websock";
 import * as message from "./message.js";
 import * as rendezvous from "./rendezvous.js";
 import { loadVp9 } from "./codec";
+import { HwVideoDecoder, hwCodecs } from "./hwdecoder";
 import * as sha256 from "fast-sha256";
 import * as globals from "./globals";
 import * as consts from "./consts";
@@ -32,6 +33,12 @@ export default class Connection {
   _password: Uint8Array | undefined;
   _options: any;
   _videoTestSpeed: number[];
+  _hw: { [kind: string]: HwVideoDecoder } = {};
+  _hwVp9Failed = false;
+  _hwOwed = 0;
+  _hwDisplay = 0;
+  _lastRefresh = 0;
+  _hwCanvas: HTMLCanvasElement | undefined;
   //_cursors: { [name: number]: any };
 
   constructor() {
@@ -414,6 +421,8 @@ export default class Connection {
     clearInterval(this._interval);
     this._ws?.close();
     this._videoDecoder?.close();
+    Object.values(this._hw).forEach((d) => d.close());
+    this._hw = {};
   }
 
   refresh() {
@@ -451,11 +460,21 @@ export default class Connection {
     }
   }
 
-  changePreferCodec() {
-    const supported_decoding = message.SupportedDecoding.fromPartial({
+  getSupportedDecoding(): message.SupportedDecoding {
+    const pref = String(this.getOption("codec-preference") || "auto");
+    let prefer = message.SupportedDecoding_PreferCodec.Auto;
+    if (pref == "vp9") prefer = message.SupportedDecoding_PreferCodec.VP9;
+    else if (pref == "h264" && hwCodecs.h264)
+      prefer = message.SupportedDecoding_PreferCodec.H264;
+    return message.SupportedDecoding.fromPartial({
       ability_vp9: 1,
-      ability_h264: 1,
+      ability_h264: hwCodecs.h264 ? 1 : 0,
+      prefer,
     });
+  }
+
+  changePreferCodec() {
+    const supported_decoding = this.getSupportedDecoding();
     const option = message.OptionMessage.fromPartial({ supported_decoding });
     const misc = message.Misc.fromPartial({ option });
     this._ws?.sendMessage({ misc });
@@ -490,7 +509,13 @@ export default class Connection {
     if (q != undefined) {
       msg.image_quality = q;
       n += 1;
+    } else if (this.getImageQuality() == "custom") {
+      msg.custom_image_quality = this.getCustomImageQuality() << 8;
+      n += 1;
     }
+    msg.custom_fps = this.getCustomFps();
+    msg.supported_decoding = this.getSupportedDecoding();
+    n += 2;
     if (this._options["show-remote-cursor"]) {
       msg.show_remote_cursor = yes;
       n += 1;
@@ -524,6 +549,14 @@ export default class Connection {
       this.msgbox("", "", "");
       this._firstFrame = true;
     }
+    if (vf.h264s && hwCodecs.h264) {
+      this.hwDecode("h264", vf.h264s, vf.display);
+      return;
+    }
+    if (vf.vp9s && hwCodecs.vp9 && !this._hwVp9Failed) {
+      this.hwDecode("vp9", vf.vp9s, vf.display);
+      return;
+    }
     if (vf.vp9s) {
       const dec = this._videoDecoder;
       var tm = new Date().getTime();
@@ -552,6 +585,97 @@ export default class Connection {
         });
       });
     }
+  }
+
+  requestKeyFrame() {
+    const now = Date.now();
+    if (now - this._lastRefresh < 1000) return;
+    this._lastRefresh = now;
+    this.refresh();
+  }
+
+  hwDecode(kind: "h264" | "vp9", frames: message.EncodedVideoFrames, display: number) {
+    let dec = this._hw[kind];
+    if (!dec) {
+      dec = new HwVideoDecoder(
+        kind,
+        (frame) => this.emitHwFrame(this._hwDisplay, frame),
+        (why) => this.onHwFailure(kind, why)
+      );
+      this._hw[kind] = dec;
+    }
+    this._hwDisplay = display;
+    let queued = 0;
+    for (const f of frames.frames) {
+      if (dec.decode(f.data, f.key, Number(f.pts))) queued++;
+    }
+    if (queued == 0) {
+      this.sendVideoReceived();
+      this.requestKeyFrame();
+      return;
+    }
+    if (dec.queueSize <= 2) this.sendVideoReceived();
+    else this._hwOwed++;
+  }
+
+  emitHwFrame(display: number, frame: any) {
+    if (this._hwOwed > 0) {
+      this._hwOwed--;
+      this.sendVideoReceived();
+    }
+    const hook = (window as any).onVideoFrame;
+    if (typeof hook === "function") {
+      hook(display, frame);
+      return;
+    }
+    try {
+      const w = frame.displayWidth;
+      const h = frame.displayHeight;
+      if (!this._hwCanvas) this._hwCanvas = document.createElement("canvas");
+      const canvas = this._hwCanvas;
+      if (canvas.width != w) canvas.width = w;
+      if (canvas.height != h) canvas.height = h;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+      ctx.drawImage(frame, 0, 0);
+      const img = ctx.getImageData(0, 0, w, h);
+      (window as any).onRgba(display, new Uint8Array(img.data.buffer));
+    } finally {
+      frame.close();
+    }
+  }
+
+  onHwFailure(kind: string, why: string) {
+    console.warn("WebCodecs " + kind + " decoder failed: " + why);
+    delete this._hw[kind];
+    if (kind == "vp9") this._hwVp9Failed = true;
+    this.requestKeyFrame();
+  }
+
+  getCustomFps(): number {
+    const v = parseInt(String(this.getOption("custom-fps")), 10);
+    return Math.min(120, Math.max(5, isNaN(v) ? 60 : v));
+  }
+
+  getCustomImageQuality(): number {
+    const v = parseInt(String(this.getOption("custom_image_quality")), 10);
+    return isNaN(v) ? 50 : Math.min(100, Math.max(10, v));
+  }
+
+  setCustomFps(fps: number) {
+    this.setOption("custom-fps", String(fps));
+    const option = message.OptionMessage.fromPartial({ custom_fps: this.getCustomFps() });
+    const misc = message.Misc.fromPartial({ option });
+    this._ws?.sendMessage({ misc });
+  }
+
+  setCustomImageQuality(quality: number) {
+    this.setOption("custom_image_quality", String(quality));
+    this.setOption("image-quality", "custom");
+    const option = message.OptionMessage.fromPartial({
+      custom_image_quality: this.getCustomImageQuality() << 8,
+    });
+    const misc = message.Misc.fromPartial({ option });
+    this._ws?.sendMessage({ misc });
   }
 
   handlePeerInfo(pi: message.PeerInfo) {
@@ -984,6 +1108,10 @@ export default class Connection {
 
   setImageQuality(value: string) {
     this.setOption("image-quality", value);
+    if (value == "custom") {
+      this.setCustomImageQuality(this.getCustomImageQuality());
+      return;
+    }
     const image_quality = this.getImageQualityEnum(value, false);
     if (image_quality == undefined) return;
     const option = message.OptionMessage.fromPartial({ image_quality });

@@ -77,21 +77,20 @@ class RawTouchGestureDetectorRegion extends StatefulWidget {
 }
 
 /// touchMode only:
-///   LongPress -> left down, move to drag, left up on release
+///   LongPress -> right click on release, or left drag if the finger moves
 ///   OneFingerPan -> start/end -> left down start/end
 ///   onDoubleTapDown -> move to
 ///   onLongPressDown => move to
 ///
-/// all modes:
-///   DoubleFiner tap -> right click
-///
 /// mouseMode only:
+///   DoubleFiner -> right click
 ///   HoldDrag -> left drag
 class _RawTouchGestureDetectorRegionState
     extends State<RawTouchGestureDetectorRegion> {
   Offset _cacheLongPressPosition = Offset(0, 0);
-  // Touch mode: a press that is held turns into a left button press, so the
-  // finger can keep moving to drag a window or select text.
+  // Touch mode: once a press has been held, releasing without moving is a right click,
+  // while moving the finger drags with the left button (to move windows, select text).
+  bool _longPressActive = false;
   bool _longPressLeftDown = false;
   // Timestamp of the last long press event.
   int _cacheLongPressPositionTs = 0;
@@ -236,6 +235,8 @@ class _RawTouchGestureDetectorRegionState
 
   onLongPressDown(LongPressDownDetails d) async {
     lastDeviceKind = d.kind;
+    _longPressActive = false;
+    _longPressLeftDown = false;
     if (isNotTouchBasedDevice()) {
       return;
     }
@@ -261,7 +262,16 @@ class _RawTouchGestureDetectorRegionState
       return;
     }
     if (handleTouch) {
-      _longPressLeftDown = false;
+      if (!ffi.ffiModel.isPeerMobile) {
+        if (_longPressLeftDown) {
+          await inputModel.tapUp(MouseButtons.left);
+        } else if (_longPressActive) {
+          await inputModel.tap(MouseButtons.right);
+        }
+        _longPressActive = false;
+        _longPressLeftDown = false;
+        return;
+      }
       await inputModel.tapUp(MouseButtons.left);
     }
   }
@@ -278,8 +288,7 @@ class _RawTouchGestureDetectorRegionState
         if (!isMoved) {
           return;
         }
-        _longPressLeftDown = true;
-        await inputModel.tapDown(MouseButtons.left);
+        _longPressActive = true;
         return;
       } else {
         if (shouldBlockMouseModeEvent()) {
@@ -295,8 +304,25 @@ class _RawTouchGestureDetectorRegionState
   }
 
   onLongPressMoveUpdate(LongPressMoveUpdateDetails d) async {
-    if ((!ffiModel.isPeerMobile && !_longPressLeftDown) ||
-        isNotTouchBasedDevice()) {
+    if (isNotTouchBasedDevice()) {
+      return;
+    }
+    if (!ffiModel.isPeerMobile) {
+      if (!handleTouch || !_longPressActive) {
+        return;
+      }
+      if (!_longPressLeftDown &&
+          (d.localPosition - _cacheLongPressPosition).distance < 12) {
+        return;
+      }
+      if (!ffi.cursorModel.isInRemoteRect(d.localPosition)) {
+        return;
+      }
+      if (!_longPressLeftDown) {
+        _longPressLeftDown = true;
+        await inputModel.tapDown(MouseButtons.left);
+      }
+      await ffi.cursorModel.move(d.localPosition.dx, d.localPosition.dy);
       return;
     }
     if (handleTouch) {
@@ -319,18 +345,6 @@ class _RawTouchGestureDetectorRegionState
   onDoubleFinerTap(TapDownDetails d) async {
     lastDeviceKind = d.kind;
     if (isNotTouchBasedDevice()) {
-      return;
-    }
-
-    // mobile touch mode: right click where the fingers touched
-    if (isMobile && ffiModel.touchMode) {
-      final pos = _doubleFinerTapPosition;
-      if (!ffi.cursorModel.isInRemoteRect(pos)) {
-        return;
-      }
-      if (await ffi.cursorModel.move(pos.dx, pos.dy)) {
-        await inputModel.tap(MouseButtons.right);
-      }
       return;
     }
 

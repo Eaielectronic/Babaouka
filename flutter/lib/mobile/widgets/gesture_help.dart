@@ -290,11 +290,6 @@ class _GestureHelpState extends State<GestureHelp> {
                               width,
                               GestureIcons.iconGesturePressHold,
                               translate("One-Long Tap"),
-                              translate("Left Mouse")),
-                          GestureInfo(
-                              width,
-                              GestureIcons.iconGestureFDrag,
-                              translate("Two-Finger Tap"),
                               translate("Right Mouse")),
                           GestureInfo(
                               width,
@@ -327,11 +322,6 @@ class _GestureHelpState extends State<GestureHelp> {
                               width,
                               GestureIcons.iconGesturePressHold,
                               translate("One-Long Tap"),
-                              translate("Right Mouse")),
-                          GestureInfo(
-                              width,
-                              GestureIcons.iconGestureFDrag,
-                              translate("Two-Finger Tap"),
                               translate("Right Mouse")),
                           GestureInfo(
                               width,

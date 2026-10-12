@@ -1130,7 +1130,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   Widget getBodyForMobile() {
     final keyboardIsVisible = keyboardVisibilityController.isVisible;
-    return Container(
+    // The stack takes its size from its children, and the image and cursor have no size of
+    // their own. Without this it can collapse to 0x0: the picture is clipped away and the
+    // touch area is empty, so the screen stays blank and nothing reacts to a finger.
+    return SizedBox.expand(
+        child: Container(
         color: MyTheme.canvasColor,
         child: Stack(children: () {
           final paints = [
@@ -1187,7 +1191,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
             ));
           }
           return paints;
-        }()));
+        }())));
   }
 
   Widget getBodyForDesktopWithListener() {

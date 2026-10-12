@@ -731,5 +731,39 @@
     }
   }
 
+  // ---------- footer documents ----------
+  var DOCS = {
+    about: ['À propos', '<p>Draw and Paint est un convertisseur de fichiers gratuit qui fonctionne entièrement dans votre navigateur : images, PDF, données (CSV, JSON), texte, encodage, audio et archives ZIP.</p><p>Aucun fichier n\'est envoyé sur un serveur : la conversion est faite sur votre appareil, ce qui la rend rapide et privée.</p>'],
+    legal: ['Mentions légales', '<h3>Éditeur</h3><p>Draw and Paint, site personnel à but non commercial.</p><h3>Hébergement</h3><p>Le site est hébergé par GitHub Pages (GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis).</p><h3>Propriété intellectuelle</h3><p>Le contenu et le code de ce site sont fournis tels quels. Les fichiers que vous convertissez restent votre propriété.</p>'],
+    privacy: ['Confidentialité', '<p>Les fichiers que vous choisissez sont traités localement dans votre navigateur et ne quittent jamais votre appareil.</p><p>Ce site ne crée pas de compte et ne vous demande aucune donnée personnelle. Il peut mémoriser localement, dans votre navigateur, des préférences techniques ; vous pouvez les effacer à tout moment depuis les réglages de votre navigateur.</p>'],
+    terms: ['Conditions d\'utilisation', '<p>Le service est proposé gratuitement, sans garantie. Vérifiez toujours le résultat d\'une conversion avant de supprimer vos fichiers d\'origine.</p><p>Vous vous engagez à n\'utiliser l\'outil qu\'avec des fichiers dont vous avez le droit de disposer.</p>'],
+    sitemap: ['Plan du site', '<ul><li>Accueil : convertisseur de fichiers</li><li>Images (JPEG, PNG, WebP)</li><li>Image vers PDF</li><li>CSV / JSON</li><li>Texte</li><li>Encodage (Base64, empreintes, hexadécimal)</li><li>Audio vers WAV</li><li>ZIP (créer et extraire)</li><li>À propos, mentions légales, confidentialité, conditions d\'utilisation, contact</li></ul>'],
+    contact: ['Contact', '<p>Pour une question ou un signalement, utilisez la rubrique « Issues » du dépôt du projet sur GitHub.</p>']
+  };
+
+  function openDoc(key) {
+    var d = DOCS[key];
+    if (!d) return;
+    var box = el('div', { html: '<h2></h2>' + d[1] });
+    box.querySelector('h2').textContent = d[0];
+    var close = el('button', { type: 'button', text: 'Fermer' });
+    box.appendChild(close);
+    var modal = el('div', { 'class': 'cv-modal' }, box);
+    function shut() { modal.remove(); }
+    close.addEventListener('click', shut);
+    modal.addEventListener('click', function (e) { if (e.target === modal) shut(); });
+    document.body.appendChild(modal);
+  }
+
+  var foot = document.getElementById('cover-foot');
+  if (foot) {
+    foot.addEventListener('click', function (e) {
+      var a = e.target.closest ? e.target.closest('[data-doc]') : null;
+      if (!a) return;
+      e.preventDefault();
+      openDoc(a.getAttribute('data-doc'));
+    });
+  }
+
   selectTool(TOOLS[0]);
 })();

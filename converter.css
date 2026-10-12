@@ -261,13 +261,90 @@
 }
 
 #cover-foot {
+  max-width: 880px;
+  margin: 18px auto 0;
+  padding: 18px 16px 34px;
+  border-top: 1px solid #e1e6f2;
   text-align: center;
+  color: #98a1b8;
+  font-size: 12px;
 }
 
-#cover-start {
+#cover-foot nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 4px;
+}
+
+#cover-foot a {
   display: inline-block;
-  padding: 28px 44px 40px;
-  color: #c7ccd9;
-  font: 9px sans-serif;
+  padding: 8px 10px;
+  color: #98a1b8;
   text-decoration: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#cover-foot a:hover {
+  color: #5b6478;
+  text-decoration: underline;
+}
+
+#cover-foot p {
+  margin: 6px 0 0;
+}
+
+.cv-modal {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(20, 27, 45, 0.55);
+}
+
+.cv-modal > div {
+  width: 100%;
+  max-width: 640px;
+  max-height: 85vh;
+  overflow: auto;
+  padding: 22px 22px 18px;
+  border-radius: 14px;
+  background: #fff;
+  color: #1c2333;
+  font-size: 15px;
+  line-height: 1.6;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+
+.cv-modal h2 {
+  margin: 0 0 10px;
+  font-size: 20px;
+}
+
+.cv-modal h3 {
+  margin: 16px 0 4px;
+  font-size: 15px;
+}
+
+.cv-modal p,
+.cv-modal ul {
+  margin: 0 0 10px;
+}
+
+.cv-modal button {
+  margin-top: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: #2b5cff;
+  color: #fff;
+  padding: 9px 20px;
+  font-size: 14px;
+  cursor: pointer;
 }

@@ -81,9 +81,10 @@ class RawTouchGestureDetectorRegion extends StatefulWidget {
 ///   onDoubleTapDown -> move to
 ///   onLongPressDown => move to
 ///
-/// all modes (one finger is always the left button, two fingers the right one):
-///   Tap / LongPress -> left click
-///   DoubleFiner tap -> right click
+/// all modes (one finger taps are the right button, two fingers the left one):
+///   Tap / LongPress -> right click
+///   DoubleFiner tap -> left click
+///   (a one finger drag still holds the left button, so windows can be moved)
 ///
 /// mouseMode only:
 ///   HoldDrag -> left drag
@@ -168,11 +169,11 @@ class _RawTouchGestureDetectorRegionState
       final isMoved =
           await ffi.cursorModel.move(d.localPosition.dx, d.localPosition.dy);
       if (isMoved) {
-        // If pan already handled 'down', don't send it again.
         if (lastTapDownDetails != null && !_touchModePanStarted) {
-          await inputModel.tapDown(MouseButtons.left);
+          await inputModel.tap(MouseButtons.right);
+        } else {
+          await inputModel.tapUp(MouseButtons.left);
         }
-        await inputModel.tapUp(MouseButtons.left);
       }
     }
   }
@@ -193,7 +194,7 @@ class _RawTouchGestureDetectorRegionState
         return;
       }
       // Mobile, "Mouse mode"
-      await inputModel.tap(MouseButtons.left);
+      await inputModel.tap(MouseButtons.right);
     }
   }
 
@@ -279,7 +280,7 @@ class _RawTouchGestureDetectorRegionState
           return;
         }
       }
-      await inputModel.tap(MouseButtons.left);
+      await inputModel.tap(MouseButtons.right);
     } else {
       // It's better to send a message to tell the controlled device that the long press event is triggered.
       // We're now using a `TimerTask` in `InputService.kt` to decide whether to trigger the long press event.
@@ -320,7 +321,7 @@ class _RawTouchGestureDetectorRegionState
         return;
       }
       if (await ffi.cursorModel.move(pos.dx, pos.dy)) {
-        await inputModel.tap(MouseButtons.right);
+        await inputModel.tap(MouseButtons.left);
       }
       return;
     }
@@ -331,7 +332,7 @@ class _RawTouchGestureDetectorRegionState
     final isDesktopInRemoteRect = (isDesktop || isWebDesktop) &&
         ffi.cursorModel.isInRemoteRect(_doubleFinerTapPosition);
     if (isMobileMouseMode || isDesktopInRemoteRect) {
-      await inputModel.tap(MouseButtons.right);
+      await inputModel.tap(MouseButtons.left);
     }
   }
 

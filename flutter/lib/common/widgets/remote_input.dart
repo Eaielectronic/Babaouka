@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -77,7 +78,8 @@ class RawTouchGestureDetectorRegion extends StatefulWidget {
 }
 
 /// touchMode only:
-///   LongPress -> right click on release, or left drag if the finger moves
+///   LongPress -> left button down, move to drag, left up on release
+///   TwoFingerTap -> right click (detected from the raw fingers)
 ///   OneFingerPan -> start/end -> left down start/end
 ///   onDoubleTapDown -> move to
 ///   onLongPressDown => move to
@@ -88,10 +90,19 @@ class RawTouchGestureDetectorRegion extends StatefulWidget {
 class _RawTouchGestureDetectorRegionState
     extends State<RawTouchGestureDetectorRegion> {
   Offset _cacheLongPressPosition = Offset(0, 0);
-  // Touch mode: once a press has been held, releasing without moving is a right click,
-  // while moving the finger drags with the left button (to move windows, select text).
-  bool _longPressActive = false;
+  // Touch mode: a held press presses the left button, so releasing is a (long) left click
+  // and moving the finger drags (to move windows, select text).
   bool _longPressLeftDown = false;
+  bool _panDownPending = false;
+  // Touch mode: a quick tap with two fingers is a right click. It is detected from the raw
+  // fingers because the gesture recognizers compete and let a single tap win.
+  final Map<int, Offset> _fingersDown = {};
+  int _fingersMax = 0;
+  int _fingersUp = 0;
+  Duration? _fingersStart;
+  bool _fingersMoved = false;
+  bool _multiTouch = false;
+  Timer? _multiTouchReset;
   // Timestamp of the last long press event.
   int _cacheLongPressPositionTs = 0;
   double _mouseScrollIntegral = 0; // mouse scroll speed controller
@@ -124,9 +135,81 @@ class _RawTouchGestureDetectorRegionState
   @override
   Widget build(BuildContext context) {
     return RawGestureDetector(
-      child: widget.child,
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: _onFingerDown,
+        onPointerMove: _onFingerMove,
+        onPointerUp: _onFingerUp,
+        onPointerCancel: _onFingerCancel,
+        child: widget.child,
+      ),
       gestures: makeGestures(context),
     );
+  }
+
+  bool get _twoFingerTapEnabled => isMobile && ffiModel.touchMode;
+
+  void _onFingerDown(PointerDownEvent e) {
+    if (!kTouchBasedDeviceKinds.contains(e.kind)) return;
+    if (_fingersDown.isEmpty) {
+      _fingersStart = e.timeStamp;
+      _fingersMax = 0;
+      _fingersUp = 0;
+      _fingersMoved = false;
+      _multiTouch = false;
+      _multiTouchReset?.cancel();
+    }
+    _fingersDown[e.pointer] = e.localPosition;
+    if (_fingersDown.length > _fingersMax) _fingersMax = _fingersDown.length;
+    if (_fingersMax >= 2) _multiTouch = true;
+  }
+
+  void _onFingerMove(PointerMoveEvent e) {
+    final down = _fingersDown[e.pointer];
+    if (down != null && (e.localPosition - down).distance > 15) {
+      _fingersMoved = true;
+    }
+  }
+
+  void _onFingerCancel(PointerCancelEvent e) {
+    _fingersDown.remove(e.pointer);
+    _fingersMoved = true;
+    if (_fingersDown.isEmpty) _endFingers();
+  }
+
+  Future<void> _onFingerUp(PointerUpEvent e) async {
+    if (!_fingersDown.containsKey(e.pointer)) return;
+    _fingersUp++;
+    if (_fingersUp < _fingersDown.length) return;
+    final positions = _fingersDown.values.toList();
+    // Event time stamps, not the time of processing, so a busy page does not turn a tap into a hold.
+    final quick = _fingersStart != null &&
+        (e.timeStamp - _fingersStart!).inMilliseconds < 500;
+    final isTwoFingerTap = _fingersMax == 2 &&
+        positions.length == 2 &&
+        !_fingersMoved &&
+        quick &&
+        _twoFingerTapEnabled &&
+        !isSpecialHoldDragActive;
+    _endFingers();
+    if (!isTwoFingerTap) return;
+    final mid = (positions[0] + positions[1]) / 2;
+    if (ffi.cursorModel.shouldBlock(mid.dx, mid.dy)) return;
+    if (!ffi.cursorModel.isInRemoteRect(mid)) return;
+    if (await ffi.cursorModel.move(mid.dx, mid.dy)) {
+      await inputModel.tap(MouseButtons.right);
+    }
+  }
+
+  void _endFingers() {
+    _fingersDown.clear();
+    _fingersUp = 0;
+    // A single tap is only confirmed once the double tap window (about 300 ms) has passed, so
+    // keep ignoring it for a while after the last finger is up.
+    _multiTouchReset?.cancel();
+    _multiTouchReset = Timer(const Duration(milliseconds: 800), () {
+      _multiTouch = false;
+    });
   }
 
   bool isNotTouchBasedDevice() {
@@ -157,6 +240,10 @@ class _RawTouchGestureDetectorRegionState
   }
 
   onTapUp(TapUpDetails d) async {
+    if (_multiTouch && _twoFingerTapEnabled) {
+      _lastTapDownDetails = null;
+      return;
+    }
     final TapDownDetails? lastTapDownDetails = _lastTapDownDetails;
     _lastTapDownDetails = null;
     if (isNotTouchBasedDevice()) {
@@ -235,7 +322,6 @@ class _RawTouchGestureDetectorRegionState
 
   onLongPressDown(LongPressDownDetails d) async {
     lastDeviceKind = d.kind;
-    _longPressActive = false;
     _longPressLeftDown = false;
     if (isNotTouchBasedDevice()) {
       return;
@@ -262,16 +348,7 @@ class _RawTouchGestureDetectorRegionState
       return;
     }
     if (handleTouch) {
-      if (!ffi.ffiModel.isPeerMobile) {
-        if (_longPressLeftDown) {
-          await inputModel.tapUp(MouseButtons.left);
-        } else if (_longPressActive) {
-          await inputModel.tap(MouseButtons.right);
-        }
-        _longPressActive = false;
-        _longPressLeftDown = false;
-        return;
-      }
+      _longPressLeftDown = false;
       await inputModel.tapUp(MouseButtons.left);
     }
   }
@@ -288,7 +365,8 @@ class _RawTouchGestureDetectorRegionState
         if (!isMoved) {
           return;
         }
-        _longPressActive = true;
+        _longPressLeftDown = true;
+        await inputModel.tapDown(MouseButtons.left);
         return;
       } else {
         if (shouldBlockMouseModeEvent()) {
@@ -308,19 +386,11 @@ class _RawTouchGestureDetectorRegionState
       return;
     }
     if (!ffiModel.isPeerMobile) {
-      if (!handleTouch || !_longPressActive) {
-        return;
-      }
-      if (!_longPressLeftDown &&
-          (d.localPosition - _cacheLongPressPosition).distance < 12) {
+      if (!handleTouch || !_longPressLeftDown) {
         return;
       }
       if (!ffi.cursorModel.isInRemoteRect(d.localPosition)) {
         return;
-      }
-      if (!_longPressLeftDown) {
-        _longPressLeftDown = true;
-        await inputModel.tapDown(MouseButtons.left);
       }
       await ffi.cursorModel.move(d.localPosition.dx, d.localPosition.dy);
       return;
@@ -406,7 +476,6 @@ class _RawTouchGestureDetectorRegionState
       if (!ffi.cursorModel.isInRemoteRect(d.localPosition)) {
         return;
       }
-
       _touchModePanStarted = true;
       if (isDesktop || isWebDesktop) {
         ffi.cursorModel.trySetRemoteWindowCoords();
@@ -422,8 +491,13 @@ class _RawTouchGestureDetectorRegionState
         await ffi.cursorModel
             .move(_cacheLongPressPosition.dx, _cacheLongPressPosition.dy);
       }
-      // In relative mouse mode, skip mouse down - only send movement via sendMobileRelativeMouseMove
-      if (!inputModel.relativeMouseMode.value) {
+      // The scale recognizer also "starts" when a second finger lands without a move; that is a
+      // two-finger tap, not a drag. So on touch screens the button is pressed with the first
+      // movement update instead of here.
+      if (isMobile && ffiModel.touchMode) {
+        _panDownPending = true;
+      } else if (!inputModel.relativeMouseMode.value) {
+        // In relative mouse mode, skip mouse down - only send movement via sendMobileRelativeMouseMove
         await inputModel.sendMouse('down', MouseButtons.left);
       }
       await ffi.cursorModel.move(d.localPosition.dx, d.localPosition.dy);
@@ -450,6 +524,12 @@ class _RawTouchGestureDetectorRegionState
     if (handleTouch && !_touchModePanStarted) {
       return;
     }
+    if (_panDownPending) {
+      _panDownPending = false;
+      if (!inputModel.relativeMouseMode.value) {
+        await inputModel.sendMouse('down', MouseButtons.left);
+      }
+    }
     // In relative mouse mode, send delta directly without position tracking.
     if (inputModel.relativeMouseMode.value) {
       await inputModel.sendMobileRelativeMouseMove(d.delta.dx, d.delta.dy);
@@ -460,6 +540,11 @@ class _RawTouchGestureDetectorRegionState
 
   onOneFingerPanEnd(DragEndDetails d) async {
     _touchModePanStarted = false;
+    if (_panDownPending) {
+      // Never moved: no button was pressed, so none must be released.
+      _panDownPending = false;
+      return;
+    }
     if (isNotTouchBasedDevice()) {
       return;
     }
@@ -480,6 +565,7 @@ class _RawTouchGestureDetectorRegionState
   // double-click problem on iPad with magic mouse.
   onOneFingerPanCancel() {
     _touchModePanStarted = false;
+    _panDownPending = false;
   }
 
   // scale + pan event

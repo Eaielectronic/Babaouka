@@ -9,6 +9,7 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/mobile/widgets/floating_mouse.dart';
 import 'package:flutter_hbb/mobile/widgets/floating_mouse_widgets.dart';
 import 'package:flutter_hbb/mobile/widgets/gesture_help.dart';
+import 'package:flutter_hbb/mobile/widgets/remote_keyboard.dart';
 import 'package:flutter_hbb/models/chat_model.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
 import 'package:flutter_svg/svg.dart';
@@ -40,6 +41,8 @@ void _disableAndroidSoftKeyboard({bool? isKeyboardVisible}) {
     }
   }
 }
+
+const _kBarBg = Color(0xFF202124);
 
 class RemotePage extends StatefulWidget {
   RemotePage(
@@ -87,7 +90,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   bool _showQuickSendBar = true;
   final TextEditingController _quickSendController = TextEditingController();
   bool _sidePanelOpen = false;
-  bool _showPcKeyboard = false;
+  bool _showVirtualKeyboard = false;
+  final FocusNode _composeFocus = FocusNode();
 
   _RemotePageState(String id) {
     initSharedStates(id);
@@ -111,6 +115,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           .showLoading(translate('Connecting...'), onCancel: closeConnection);
     });
     WakelockManager.enable(_uniqueKey);
+    _composeFocus.addListener(() {
+      if (_composeFocus.hasFocus && _showVirtualKeyboard && mounted) {
+        setState(() => _showVirtualKeyboard = false);
+      }
+    });
     _physicalFocusNode.requestFocus();
     gFFI.inputModel.listenToMouse(true);
     gFFI.qualityMonitorModel.checkShowQualityMonitor(sessionId);
@@ -172,6 +181,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     _mobileFocusNode.dispose();
     _physicalFocusNode.dispose();
     _quickSendController.dispose();
+    _composeFocus.dispose();
     clearWaylandKeyboardPromptSuppressedForConnection(sessionId.toString());
     _waylandKeyboardGateWorker?.dispose();
     inputModel.keyboardInputAllowed = true;
@@ -447,422 +457,189 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   Widget _bottomWidget() {
     if (_showGestureHelp) return getGestureHelp();
-    return _buildGoogleBottomBar();
+    return _buildBottomBar();
   }
 
-  Widget _buildGoogleBottomBar() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF202124),
-        border: Border(
-          top: BorderSide(color: Color(0xFF3C4043), width: 1),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black54,
-            blurRadius: 10,
-            offset: Offset(0, -3),
+  void _toggleVirtualKeyboard() {
+    if (_showVirtualKeyboard) {
+      setState(() => _showVirtualKeyboard = false);
+      return;
+    }
+    _composeFocus.unfocus();
+    _mobileFocusNode.unfocus();
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
+    setState(() {
+      _showEdit = false;
+      _showVirtualKeyboard = true;
+    });
+  }
+
+  void _openSystemKeyboard() {
+    setState(() => _showVirtualKeyboard = false);
+    openKeyboard();
+  }
+
+  void _sendComposedText() {
+    final text = _quickSendController.text;
+    if (text.isEmpty) return;
+    if (!inputModel.keyboardInputAllowed) {
+      openKeyboard();
+      return;
+    }
+    bind.sessionInputString(sessionId: sessionId, value: text);
+    _quickSendController.clear();
+  }
+
+  Widget _buildBottomBar() {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final isMac = gFFI.ffiModel.pi.platform == kPeerPlatformMacOS;
+    return Material(
+      color: _kBarBg,
+      elevation: 8,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                child: _buildComposeRow(),
+              ),
+              if (_showVirtualKeyboard)
+                RemoteKeyboard(
+                  inputModel: inputModel,
+                  isMac: isMac,
+                  canSend: () => inputModel.keyboardInputAllowed,
+                  onClose: () => setState(() => _showVirtualKeyboard = false),
+                ),
+            ],
           ),
-        ],
-      ),
-      padding: EdgeInsets.only(
-        left: 10,
-        right: 10,
-        top: 8,
-        bottom: 8 + MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_showPcKeyboard) _buildPcKeyboardShelf(),
-            if (_showPcKeyboard) const SizedBox(height: 8),
-            Row(
-              children: [
-                InkWell(
-                  onTap: () => setState(() => _showPcKeyboard = !_showPcKeyboard),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: _showPcKeyboard ? const Color(0xFF1A73E8) : const Color(0xFF303134),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _showPcKeyboard ? const Color(0xFF8AB4F8) : Colors.white24,
-                        width: 1.2,
-                      ),
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.keyboard,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                InkWell(
-                  onTap: openKeyboard,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF303134),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white24, width: 1),
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.keyboard_alt_outlined,
-                        color: Colors.white70,
-                        size: 24,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Container(
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(23),
-                      border: Border.all(color: const Color(0xFFDADCE0), width: 1),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 4,
-                          offset: Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: TextField(
-                      controller: _quickSendController,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      cursorColor: const Color(0xFF1A73E8),
-                      autofocus: false,
-                      decoration: InputDecoration(
-                        hintText: translate('Type text to send...'),
-                        hintStyle: const TextStyle(
-                          color: Color(0xFF9AA0A6),
-                          fontSize: 14,
-                        ),
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      onSubmitted: (val) {
-                        if (val.isNotEmpty) {
-                          bind.sessionInputString(sessionId: sessionId, value: val);
-                          _quickSendController.clear();
-                        }
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: _quickSendController,
-                  builder: (context, value, child) {
-                    final isEmpty = value.text.isEmpty;
-                    return GestureDetector(
-                      onTap: () {
-                        if (isEmpty) {
-                          inputModel.inputKey('VK_BACK');
-                        } else {
-                          bind.sessionInputString(sessionId: sessionId, value: value.text);
-                          _quickSendController.clear();
-                        }
-                      },
-                      child: Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          color: isEmpty ? const Color(0xFF3C4043) : const Color(0xFF1A73E8),
-                          shape: BoxShape.circle,
-                          border: isEmpty ? Border.all(color: const Color(0xFF5F6368), width: 1) : null,
-                          boxShadow: isEmpty
-                              ? null
-                              : const [
-                                  BoxShadow(
-                                    color: Color(0x551A73E8),
-                                    blurRadius: 8,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ],
-                        ),
-                        child: Center(
-                          child: Icon(
-                            isEmpty ? Icons.backspace_outlined : Icons.send_rounded,
-                            color: isEmpty ? Colors.white70 : Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildGoogleActionBtn(Icons.close, () => clientClose(sessionId, gFFI), color: Colors.red[400]),
-                _buildGoogleActionBtn(Icons.tv, () {
-                  setState(() => _showEdit = false);
-                  showOptions(context, widget.id, gFFI.dialogManager);
-                }),
-                _buildGoogleActionBtn(Icons.menu, () => setState(() => _sidePanelOpen = !_sidePanelOpen)),
-                if (gFFI.ffiModel.isPeerAndroid)
-                  _buildGoogleActionBtn(Icons.build, () => gFFI.dialogManager.toggleMobileActionsOverlay(ffi: gFFI)),
-              ],
-            ),
-          ],
         ),
       ),
     );
   }
 
-  Widget _buildGoogleActionBtn(IconData icon, VoidCallback onTap, {Color? color}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        child: Icon(icon, color: color ?? Colors.white70, size: 26),
-      ),
+  Widget _buildComposeRow() {
+    return Row(
+      children: [
+        _barButton(
+          icon: _showVirtualKeyboard ? Icons.keyboard_hide : Icons.keyboard,
+          active: _showVirtualKeyboard,
+          tooltip: translate('PC Virtual Keyboard'),
+          onTap: _toggleVirtualKeyboard,
+          onLongPress: _openSystemKeyboard,
+        ),
+        const SizedBox(width: 8),
+        if (_showQuickSendBar)
+          Expanded(child: _buildComposeField())
+        else
+          const Spacer(),
+        if (_showQuickSendBar) _buildSendTextButton(),
+        const SizedBox(width: 8),
+        _barButton(
+          icon: Icons.backspace_outlined,
+          tooltip: translate('Backspace'),
+          onTap: () => inputModel.inputKey('VK_BACK'),
+        ),
+        const SizedBox(width: 8),
+        _barButton(
+          icon: Icons.keyboard_return,
+          tooltip: translate('Enter'),
+          onTap: () => inputModel.inputKey('VK_RETURN'),
+        ),
+      ],
     );
   }
 
-  Widget _buildPcKeyboardShelf() {
-    final pi = gFFI.ffiModel.pi;
-    final isMac = pi.platform == kPeerPlatformMacOS;
+  Widget _buildComposeField() {
     return Container(
-      constraints: const BoxConstraints(maxHeight: 210),
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: const Color(0xFF202124),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF3C4043), width: 1),
-        boxShadow: const [
-          BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, -3)),
-        ],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFDADCE0)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.laptop_chromebook, color: Color(0xFF8AB4F8), size: 18),
-                    const SizedBox(width: 6),
-                    Text(
-                      translate('PC Virtual Keyboard'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    InkWell(
-                      onTap: openKeyboard,
-                      borderRadius: BorderRadius.circular(6),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF303134),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.white24, width: 0.8),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.smartphone, color: Colors.white70, size: 14),
-                            const SizedBox(width: 4),
-                            Text(
-                              translate('Mobile Keyboard'),
-                              style: const TextStyle(color: Colors.white70, fontSize: 11),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    InkWell(
-                      onTap: () => setState(() => _showPcKeyboard = false),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        child: const Icon(Icons.close, color: Colors.white54, size: 18),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _pcKeyBtn('Ctrl', () => setState(() => inputModel.ctrl = !inputModel.ctrl), active: inputModel.ctrl),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('Alt', () => setState(() => inputModel.alt = !inputModel.alt), active: inputModel.alt),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('Shift', () => setState(() => inputModel.shift = !inputModel.shift), active: inputModel.shift),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn(isMac ? 'Cmd' : 'Win', () => setState(() => inputModel.command = !inputModel.command), active: inputModel.command),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('Esc', () => inputModel.inputKey('VK_ESCAPE')),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('Tab', () => inputModel.inputKey('VK_TAB')),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('Enter', () => inputModel.inputKey('VK_RETURN')),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('Bksp', () => inputModel.inputKey('VK_BACK')),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('Del', () => inputModel.inputKey('VK_DELETE')),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('Ctrl+Alt+Del', () => bind.sessionCtrlAltDel(sessionId: sessionId)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 6),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: List.generate(12, (index) {
-                  final fnName = 'F${index + 1}';
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: _pcKeyBtn(fnName, () => inputModel.inputKey('VK_$fnName')),
-                  );
-                }),
-              ),
-            ),
-            const SizedBox(height: 6),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _pcKeyBtn('', () => inputModel.inputKey('VK_LEFT'), icon: Icons.arrow_back),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('', () => inputModel.inputKey('VK_UP'), icon: Icons.arrow_upward),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('', () => inputModel.inputKey('VK_DOWN'), icon: Icons.arrow_downward),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('', () => inputModel.inputKey('VK_RIGHT'), icon: Icons.arrow_forward),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('Home', () => inputModel.inputKey('VK_HOME')),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('End', () => inputModel.inputKey('VK_END')),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('PgUp', () => inputModel.inputKey('VK_PRIOR')),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('PgDn', () => inputModel.inputKey('VK_NEXT')),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('Space', () => inputModel.inputKey('VK_SPACE')),
-                ],
-              ),
-            ),
-            const SizedBox(height: 6),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _pcKeyBtn(translate('Select All'), () {
-                    bind.sessionInputKey(sessionId: sessionId, name: 'a', down: false, press: true, alt: false, ctrl: true, shift: false, command: false);
-                  }),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn(translate('Copy'), () {
-                    bind.sessionInputKey(sessionId: sessionId, name: 'c', down: false, press: true, alt: false, ctrl: true, shift: false, command: false);
-                  }),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn(translate('Paste'), () async {
-                    ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
-                    if (data != null && data.text != null && data.text!.isNotEmpty) {
-                      bind.sessionInputString(sessionId: sessionId, value: data.text!);
-                    } else {
-                      bind.sessionInputKey(sessionId: sessionId, name: 'v', down: false, press: true, alt: false, ctrl: true, shift: false, command: false);
-                    }
-                  }),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn(translate('Cut'), () {
-                    bind.sessionInputKey(sessionId: sessionId, name: 'x', down: false, press: true, alt: false, ctrl: true, shift: false, command: false);
-                  }),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('Undo', () {
-                    bind.sessionInputKey(sessionId: sessionId, name: 'z', down: false, press: true, alt: false, ctrl: true, shift: false, command: false);
-                  }),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('Alt+Tab', () {
-                    bind.sessionInputKey(sessionId: sessionId, name: 'Tab', down: false, press: true, alt: true, ctrl: false, shift: false, command: false);
-                  }),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('Alt+F4', () {
-                    bind.sessionInputKey(sessionId: sessionId, name: 'F4', down: false, press: true, alt: true, ctrl: false, shift: false, command: false);
-                  }),
-                  const SizedBox(width: 6),
-                  _pcKeyBtn('Win+D', () {
-                    bind.sessionInputKey(sessionId: sessionId, name: 'd', down: false, press: true, alt: false, ctrl: false, shift: false, command: true);
-                  }),
-                ],
-              ),
-            ),
-          ],
+      child: TextField(
+        controller: _quickSendController,
+        focusNode: _composeFocus,
+        style: const TextStyle(
+          color: Colors.black,
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
         ),
+        cursorColor: const Color(0xFF1A73E8),
+        textInputAction: TextInputAction.send,
+        decoration: InputDecoration(
+          hintText: translate('Type text to send...'),
+          hintStyle: const TextStyle(color: Color(0xFF80868B), fontSize: 14),
+          filled: false,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
+        ),
+        onSubmitted: (_) => _sendComposedText(),
       ),
     );
   }
 
-  Widget _pcKeyBtn(String label, VoidCallback onTap,
-      {bool active = false, double? width, IconData? icon}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        height: 36,
-        width: width,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: active ? const Color(0xFF1A73E8) : const Color(0xFF2C2D32),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: active ? const Color(0xFF64B5F6) : Colors.white24,
-            width: 0.8,
+  Widget _buildSendTextButton() {
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: _quickSendController,
+      builder: (context, value, child) {
+        if (value.text.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: _barButton(
+            icon: Icons.send_rounded,
+            filled: true,
+            circle: true,
+            tooltip: translate('Send'),
+            onTap: _sendComposedText,
           ),
-          boxShadow: const [
-            BoxShadow(color: Colors.black26, blurRadius: 2, offset: Offset(0, 1)),
-          ],
+        );
+      },
+    );
+  }
+
+  Widget _barButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    VoidCallback? onLongPress,
+    bool active = false,
+    bool filled = false,
+    bool circle = false,
+    String? tooltip,
+  }) {
+    final highlighted = active || filled;
+    final radius = BorderRadius.circular(circle ? 22 : 12);
+    return Tooltip(
+      message: tooltip ?? '',
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        borderRadius: radius,
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: highlighted ? const Color(0xFF1A73E8) : const Color(0xFF303134),
+            borderRadius: radius,
+            border: Border.all(
+              color: highlighted ? const Color(0xFF8AB4F8) : Colors.white24,
+            ),
+          ),
+          child: Icon(
+            icon,
+            color: highlighted ? Colors.white : Colors.white70,
+            size: 22,
+          ),
         ),
-        child: icon != null
-            ? Icon(icon, color: Colors.white, size: 16)
-            : Text(
-                label,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: active ? FontWeight.bold : FontWeight.w500,
-                ),
-              ),
       ),
     );
   }
@@ -913,9 +690,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'RustDesk',
-                    style: TextStyle(
+                  Text(
+                    appName,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -1102,6 +879,22 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                 label: Text(translate('More actions')),
                 onPressed: () => showActions(widget.id),
               ),
+              if (gFFI.ffiModel.isPeerAndroid) ...[
+                const SizedBox(height: 8),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white12,
+                    foregroundColor: Colors.white,
+                    alignment: Alignment.centerLeft,
+                  ),
+                  icon: const Icon(Icons.build, size: 20),
+                  label: Text(translate('Mobile Actions')),
+                  onPressed: () {
+                    setState(() => _sidePanelOpen = false);
+                    gFFI.dialogManager.toggleMobileActionsOverlay(ffi: gFFI);
+                  },
+                ),
+              ],
               const SizedBox(height: 8),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(

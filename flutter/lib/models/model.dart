@@ -1398,7 +1398,9 @@ class FfiModel with ChangeNotifier {
       } else {
         final optSession = await bind.sessionGetOption(
             sessionId: sessionId, arg: kOptionTouchMode);
-        _touchMode = optSession != '';
+        // On a touch screen a tap must click where the finger is, not where the
+        // virtual mouse cursor was left; mouse mode stays available in the menu.
+        _touchMode = optSession != '' || isMobile;
       }
     }
     if (isMobile) {

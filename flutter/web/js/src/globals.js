@@ -898,7 +898,7 @@ function startAccountAuth(op, remember) {
   let authWin = window.open('', '_blank', getAuthWindowFeatures());
   if (authWin) {
     try {
-      authWin.document.title = 'Simple Drawer Login';
+      authWin.document.title = 'Draw and Paint Login';
       authWin.document.body.textContent = 'Connecting to ' + op + '...';
     } catch (_) {}
   }

@@ -1,6 +1,6 @@
 {
-    "name": "Simple Drawer",
-    "short_name": "Simple Drawer",
+    "name": "Draw and Paint",
+    "short_name": "Draw and Paint",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

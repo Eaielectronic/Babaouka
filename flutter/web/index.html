@@ -25,13 +25,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="Simple Drawer">
+  <meta name="apple-mobile-web-app-title" content="Draw and Paint">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
 
-  <title>Simple Drawer</title>
+  <title>Draw and Paint</title>
   <link rel="manifest" href="manifest.json">
   <script src="ogvjs-1.8.6/ogv.js"></script>
   <script type="module" crossorigin src="js/dist/index.js"></script>
@@ -111,7 +111,7 @@
     var bootLogs = [];
     function bootLog(step, detail) {
       var elapsed = Date.now() - bootStartAt;
-      var line = '[Simple Drawer web boot +' + elapsed + 'ms] ' + step;
+      var line = '[Draw and Paint web boot +' + elapsed + 'ms] ' + step;
       if (detail !== undefined) {
         try {
           line += ' ' + (typeof detail === 'string' ? detail : JSON.stringify(detail));

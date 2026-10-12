@@ -41,7 +41,7 @@ export function translate(locale: string, text: string): string {
   if (!dict) dict = en;
   let res = dict[text];
   if (!res && lang != "en") res = en[text];
-  return (res || text).replace(/RustDesk/g, "Simple Drawer");
+  return (res || text).replace(/RustDesk/g, "Draw and Paint");
 }
 
 const zCode = "z".charCodeAt(0);

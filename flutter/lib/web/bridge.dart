@@ -869,7 +869,7 @@ class RustdeskImpl {
   }
 
   String mainGetAppNameSync({dynamic hint}) {
-    return js.context.callMethod('getByName', ['app-name']);
+    return 'Draw and Paint';
   }
 
   String mainUriPrefixSync({dynamic hint}) {

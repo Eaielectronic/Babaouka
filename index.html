@@ -83,11 +83,104 @@
         transform: rotate(360deg);
       }
     }
+
+    #cover {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 2147483647;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      background: #fff;
+      color: #222;
+      font: 17px/1.65 Georgia, "Times New Roman", serif;
+    }
+
+    #cover article {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 36px 20px 8px;
+    }
+
+    #cover h1 {
+      font-size: 30px;
+      line-height: 1.25;
+      margin: 0 0 6px;
+    }
+
+    #cover h2 {
+      font-size: 21px;
+      margin: 28px 0 4px;
+    }
+
+    #cover .meta {
+      color: #888;
+      font: 13px sans-serif;
+      margin: 0 0 22px;
+    }
+
+    #cover p {
+      margin: 0 0 14px;
+    }
+
+    #cover-start {
+      display: inline-block;
+      padding: 28px 44px 40px;
+      color: #c4c4c4;
+      font: 9px sans-serif;
+      text-decoration: none;
+    }
+
+    #cover-foot {
+      text-align: center;
+    }
   </style>
 
 </head>
 
 <body>
+  <div id="cover">
+    <article>
+      <h1>Apprendre à dessiner : les bases du croquis</h1>
+      <p class="meta">Carnet de dessin &middot; lecture de 4 minutes</p>
+      <p>Dessiner n'est pas un don réservé à quelques-uns : c'est une habitude d'observation que l'on entraîne
+      comme n'importe quelle autre. Voici les quelques notions qui permettent de progresser vite, avec très peu de matériel.</p>
+      <h2>1. Un matériel simple</h2>
+      <p>Un crayon HB, un crayon plus tendre (2B ou 4B), une gomme mie de pain et un carnet au grain régulier suffisent.
+      Inutile d'investir tout de suite dans des fusains ou des feutres professionnels : on apprend d'abord à contrôler la pression
+      de la main, ce qui se fait très bien avec un simple crayon à papier.</p>
+      <h2>2. Décomposer en formes simples</h2>
+      <p>Tout objet se ramène à quelques volumes : la sphère, le cube, le cylindre, le cône. Avant de chercher les détails,
+      posez ces formes légèrement, du bout des doigts, en cherchant les proportions plutôt que le contour exact. Un visage
+      devient un ovale partagé par une croix, une bouteille un cylindre, une maison un cube coiffé d'un prisme.</p>
+      <h2>3. La lumière et l'ombre</h2>
+      <p>Choisissez d'où vient la lumière, puis répartissez les valeurs : la partie éclairée, la demi-teinte, l'ombre propre et
+      l'ombre portée. Hachurez en croisant les traits plutôt qu'en appuyant fort, vous garderez ainsi la possibilité de corriger.
+      Un dessin sobre aux valeurs justes paraît toujours plus vivant qu'un dessin très détaillé aux contrastes plats.</p>
+      <h2>4. Pratiquer un peu chaque jour</h2>
+      <p>Dix minutes quotidiennes valent mieux qu'une longue séance par mois. Dessinez ce qui vous entoure : une tasse, vos mains,
+      une chaise, le paysage vu de la fenêtre. Datez chaque page : au bout de quelques semaines, comparer vos premiers croquis
+      aux derniers est la meilleure des motivations.</p>
+      <p>Enfin, acceptez les brouillons. Les dessinateurs expérimentés remplissent des carnets entiers d'essais ratés ; c'est
+      précisément ce qui leur a appris à voir.</p>
+    </article>
+    <div id="cover-foot"><a id="cover-start" href="#">starter</a></div>
+  </div>
+  <script>
+    (function () {
+      var cover = document.getElementById('cover');
+      try {
+        if (sessionStorage.getItem('dp-started') === '1') { cover.remove(); return; }
+      } catch (e) {}
+      document.getElementById('cover-start').addEventListener('click', function (e) {
+        e.preventDefault();
+        try { sessionStorage.setItem('dp-started', '1'); } catch (err) {}
+        cover.remove();
+      });
+    })();
+  </script>
   <div class="loading">
     <div class="loader"></div>
   </div>
